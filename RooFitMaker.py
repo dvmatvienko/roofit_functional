@@ -24,17 +24,20 @@ class RooFitMaker():
         if fittype == 'NLL':
             #construct NLL of pdf w.r.t data
             self._cost = pdf.get_function().createNLL(data.get_dataset(),Extended=pdf.get_extended(),GlobalObservables=pdf.get_x(),Range=Range,ExternalConstraints=ExternalConstraints)
+#            self._cost = pdf.get_function().createNLL(data.get_dataset())
             #create RooFitResult object
             self._r = pdf.get_function().fitTo(data.get_dataset(),Extended=pdf.get_extended(),GlobalObservables=pdf.get_x(),Range=Range,Save=True,PrintLevel=-1,ExternalConstraints=ExternalConstraints,Minos=Minos,Hesse=Hesse)
+#            self._r = pdf.get_function().fitTo(data.get_dataset(),Save=True,PrintLevel=-1)
         elif fittype == 'chi2':
             self._cost  = pdf.get_function().createChi2(data.get_dataset(),Extended=pdf.get_extended(),GlobalObservables=pdf.get_x(),Range=Range,ExternalConstraints=ExternalConstraints)
             self._r = pdf.get_function().chi2FitTo(data.get_dataset(),Extended=pdf.get_extended(),GlobalObservables=pdf.get_x(),Range=Range,Save=True,PrintLevel=-1,ExternalConstraints=ExternalConstraints,Minos=Minos,Hesse=Hesse)
+
+        pdf.set_NFitFloated(len(list(self._r.floatParsFinal())))
         self._pdf = pdf
 
     def dump_to_file(self, ofile : str ="fitresult.txt"):
         ofile = Path(ofile)
         r = self._r
-        pdf = self._pdf
         cov = r.covarianceMatrix()
         cor = r.correlationMatrix()
 
@@ -78,16 +81,17 @@ class RooFitMaker():
 
     def give_fit_results(self, Minos : bool = False):
         r = self._r
+#        results = list(r.floatParsFinal()) + list(r.constPars())
+        results = list(r.floatParsFinal())
         if not Minos:
-            return {x.GetName() : [x.getValV(),x.getError()] for x in r.floatParsFinal()}
+            return {x.GetName() : [x.getValV(),x.getError()] for x in results}
         else:
-            return {x.GetName() : [x.getValV(),(x.getErrorLo(),x.getErrorHi())] for x in r.floatParsFinal()}
+            return {x.GetName() : [x.getValV(),(x.getErrorLo(),x.getErrorHi())] for x in results}
 
     def give_fit_quality(self):
         pdf = self._pdf
         r = self._r
         return {'Status' : r.status(), 'Quality' : r.covQual(), 'EDM' :r.edm()}
-
 
 if __name__ == "__main__":
     from RooFitFunction import RooFitFunction
@@ -96,20 +100,20 @@ if __name__ == "__main__":
     # Delta E 1-dim RooFit function test
     de_cb = RooFitFunction('CrystalBall1',{'dE' : [-.15,.15]}, '2sidedCB', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.02,0.005,0.05], 'sigmacbR': [0.02,0.005,0.05],
         'alphaL': [0.1,0.005,2], 'alphaR': [0.1,0.005,2], 'nL' : [1,0.1,20.], 'nR' : [1,0.1,20.]})
-    de_bfGauss = RooFitFunction('Gauss',{'dE' : [-.15,.15]}, 'BFGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.01,0.001,0.05]})
+    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BFGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.01,0.001,0.05]})
     de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
 
     # Omega 1-dim RooFit function test
     mom_bw = RooFitFunction('BreitWigner', {'mom': [0.74,.855]}, 'BreitWigner', {'mean' : [0.78265,0,0], 'width' : [0.0085,0,0]})
-    mom_cb = RooFitFunction('CrystalBall2', {'mom': [0.74,.855]}, '2sidedCB', {'mom_x0CB' : [0,0,0], 'mom_sigcbL' : [0.005,0.001,0.05], 'mom_sigcbR' : [0.005,0.001,0.05],
+    mom_cb = RooFitFunction('CrystalBall2', {'all' : mom_bw}, '2sidedCB', {'mom_x0CB' : [0,0,0], 'mom_sigcbL' : [0.005,0.001,0.05], 'mom_sigcbR' : [0.005,0.001,0.05],
         'mom_alphaL' : [1,0.005,2], 'mom_alphaR' : [1,0.005,2], 'mom_nL' : [1,0.01,50.], 'mom_nR' : [1,0.01,50.]})
     mom_pdf  = mom_bw.get_convolution(mom_cb)
 
     # (Delta E - Omega) RooFit uncorr. product
     de_mom_uncorr = mom_pdf * de_pdf
 
-    data = de_mom_uncorr.get_function().generate(set(de_mom_uncorr.get_x()),100000)
+#    data = de_mom_uncorr.get_function().generate(set(de_mom_uncorr.get_x()),100000)
     data = de_mom_uncorr.get_function().generate(set(de_mom_uncorr.get_x()),500000)
-    binned_data = RooFitData("test","binned",data,de_mom_uncorr.get_x())
+    binned_data = RooFitData("test","binned",data,de_mom_uncorr.get_x(),bins=[100,100])
     r = RooFitMaker(binned_data,de_mom_uncorr,"NLL")
     r.dump_to_file()
