@@ -28,7 +28,7 @@ class RooFitPlot:
         self._projection = projection
 
         if not any([x.GetName() == projection for x in pdf.get_x()]):
-            raise ValueError("worng name of 'projection' variable. It must be coincides with the 'pdf' arguments!")
+            raise ValueError("wrong name of 'projection' variable. It must be coincides with the 'pdf' arguments!")
 
         frame = None
         for x in pdf.get_x():

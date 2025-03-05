@@ -264,6 +264,8 @@ class RooFitFunction:
             return ROOT.RooNovosibirsk(function_name,function_type,*x,*container)
         elif function_type == 'Johnson':
             return ROOT.RooJohnson(function_name,function_type,*x,*container)
+        elif function_type == 'Chebychev':
+            return ROOT.RooChebychev(function_name,function_type,*x,container)
 
     def __init__(self, name : str, x_limits: dict, function_type: str, param_dict: dict, param_dict_len: int = 0):
         self._function_name = name
