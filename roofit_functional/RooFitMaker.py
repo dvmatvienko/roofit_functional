@@ -94,18 +94,18 @@ class RooFitMaker():
         return {'Status' : r.status(), 'Quality' : r.covQual(), 'EDM' :r.edm()}
 
 if __name__ == "__main__":
-    from RooFitFunction import RooFitFunction
-    from RooFitData import RooFitData
+    from roofit_functional.RooFitFunction import RooFitFunction
+    from roofit_functional.RooFitData import RooFitData
 
     # Delta E 1-dim RooFit function test
-    de_cb = RooFitFunction('CrystalBall1',{'dE' : [-.15,.15]}, '2sidedCB', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.02,0.005,0.05], 'sigmacbR': [0.02,0.005,0.05],
+    de_cb = RooFitFunction('CrystalBall1',{'dE' : [-.15,.15]}, 'CrystalBall', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.02,0.005,0.05], 'sigmacbR': [0.02,0.005,0.05],
         'alphaL': [0.1,0.005,2], 'alphaR': [0.1,0.005,2], 'nL' : [1,0.1,20.], 'nR' : [1,0.1,20.]})
-    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BFGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.01,0.001,0.05]})
+    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BifurGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.01,0.001,0.05]})
     de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
 
     # Omega 1-dim RooFit function test
     mom_bw = RooFitFunction('BreitWigner', {'mom': [0.74,.855]}, 'BreitWigner', {'mean' : [0.78265,0,0], 'width' : [0.0085,0,0]})
-    mom_cb = RooFitFunction('CrystalBall2', {'all' : mom_bw}, '2sidedCB', {'mom_x0CB' : [0,0,0], 'mom_sigcbL' : [0.005,0.001,0.05], 'mom_sigcbR' : [0.005,0.001,0.05],
+    mom_cb = RooFitFunction('CrystalBall2', {'all' : mom_bw}, 'CrystalBall', {'mom_x0CB' : [0,0,0], 'mom_sigcbL' : [0.005,0.001,0.05], 'mom_sigcbR' : [0.005,0.001,0.05],
         'mom_alphaL' : [1,0.005,2], 'mom_alphaR' : [1,0.005,2], 'mom_nL' : [1,0.01,50.], 'mom_nR' : [1,0.01,50.]})
     mom_pdf  = mom_bw.get_convolution(mom_cb)
 
