@@ -1,10 +1,8 @@
 import ROOT 
-from typing import Any, List, Tuple
-from trycast import isassignable
+from typing import Any, List
 import numpy as np
 import pandas as pd
-
-from roofit_functional.RooFitFunction import RooFitFunction
+from math import prod
 
 class RooFitData:
     # datatype: unbinned / binned 
@@ -15,10 +13,8 @@ class RooFitData:
         self._variables = variables
 
         if datatype == 'unbinned':
-            # Unbinned RooDataSet can be filled from TTree, ASCII file, numpy/pandas, RDataFrame, or (generate from RooFitfunction object)
-            if isassignable(source,Tuple[RooFitFunction,int]):
-                self._dataset = source[0].get_function().generate(set(variables),source[1])
-            elif not isinstance(source,(ROOT.TTree,str,ROOT.RooDataSet,np.ndarray,pd.DataFrame,ROOT.RDataFrame)):
+            # Unbinned RooDataSet can be filled from TTree, ASCII file, numpy/pandas, RDataFrame
+            if not isinstance(source,(ROOT.TTree,str,ROOT.RooDataSet,np.ndarray,pd.DataFrame,ROOT.RDataFrame)):
                 raise TypeError("wrong source is chosen for unbinned DataSet. It must be one of follows: ROOT.TTree, name of ASCII file, numpy array, pandas dataframe or RDataFrame")
             if isinstance(source,ROOT.TTree):
                 self._dataset = ROOT.RooDataSet(name,name,set(variables),Import=source, Cut=cut)
@@ -47,13 +43,9 @@ class RooFitData:
             self._bins = bins
 
         elif datatype == 'binned':
-            # Binned RooDataSet can be filled from THxx or unbinned dataset ,numpy/pandas, RDataFrame or (generate from RooFitfunction object)
-            if isassignable(source,Tuple[RooFitFunction,int]):
-                for i in range(len(variables)):
-                    variables[i].setBins(bins[i])
-                self._dataset = source[0].get_function().generate(set(variables),source[1]).binnedClone()
-            elif not isinstance(source,(ROOT.TH1,ROOT.TH2,ROOT.TH3,type(self),ROOT.RooDataSet,np.ndarray,pd.DataFrame,ROOT.RDataFrame)):
-                raise TypeError(f"wrong source is chosen for binned DataSet. It must be one of follows: ROOT.THx, unbinned Dataset, numpy array or RDaTaFrame")
+            # Binned RooDataSet can be filled from THxx or unbinned dataset ,numpy/pandas, RDataFrame
+            if not isinstance(source,(ROOT.TH1,ROOT.TH2,ROOT.TH3,type(self),ROOT.RooDataSet,np.ndarray,pd.DataFrame,ROOT.RDataFrame)):
+               raise TypeError("wrong source is chosen for binned DataSet. It must be ROOT.THx, unbinned Dataset, numpy array or RDaTaFrame")
             if not isinstance(bins,(int,list,np.ndarray)):
                raise ValueError("keyword parameter 'bins' could be int or list of ints (equal binning) or list of np.ndarray (bin edges)")
             if isinstance(source,(ROOT.TH1,ROOT.TH2,ROOT.TH3)):

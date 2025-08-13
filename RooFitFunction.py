@@ -2,52 +2,11 @@ import ROOT
 import re
 import numpy as np
 from array import array
-from typing import Any, List, Tuple
-from trycast import isassignable
+from typing import Any, List
 
-def wrapped(obj, selfNormalized : bool = False, x_conditional : list | None = None):
-# name : str, x_limits: dict, function_type: str, param_dict: dict
-    if not isinstance(obj, (RooFitVar,RooFitFunction)):
-        raise TypeError("Function 'wrapped' can only have arguments of type RooFitFunction or RooFitVar!")
-    if not selfNormalized and not x_conditional is None:
-        raise ValueError(f"selfNormalized is False, but x_conditional is {x_conditonal}. It is forbidden.")
-    if not x_conditional is None and not isinstance(x_conditional,list):
-        raise TypeError(f"wrong type of x_conditional. It must be list but {type(x_conditonal)} is assigned")
 
-    name = "PDF_" + obj.get_name()
-    x_limits = obj.get_x_limits() if x_conditional is None else \
-               {key : obj.get_x_limits()[key] for key in set(obj.get_x_limits()) - set([x.GetName() for x in x_conditional])}
-    function_type = obj.get_function_type()
-
-    if isinstance(obj, RooFitVar) and ("(+)"in name  or "(*)" in name):
-        param_dict = {}
-        for v in obj.get_param_dict().values():
-            param_dict.update(v.get_param_dict())
-    else:
-        param_dict = obj.get_param_dict()
-    if not x_conditional is None:
-        functionality = {obj : x_conditional}
-    else:
-        functionality = obj
-    setattr(RooFitFunction,'_FUNCTIONALITY',functionality)
-    setattr(RooFitFunction,'_MARKER',f"wrapper_{selfNormalized}")
-    obj = RooFitFunction(name, x_limits, function_type, param_dict)
-    setattr(RooFitFunction,'_FUNCTIONALITY',None)
-    setattr(RooFitFunction,'_MARKER',None)
-    return obj
 
 class RooFitVar:
-    
-    def _arithmetic(self, other, sign : str):
-        if not isinstance(other, (type(self),RooFitFunction)):
-            raise ArithmeticError("Wrong type of instance. It must be RooFitVar or RooFitFunction")
-        x_limits = {**self.get_x_limits(), **other.get_x_limits()}
-        name = self.get_name() + sign + other.get_name()
-        param_dict = {self.get_name() : self, other.get_name() : other}
-#        param_dict = {**self.get_param_dict(), **other.get_param_dict()}
-        function_type = f'({sign})'.join([self.get_name(),other.get_name()])
-        name, function_type = function_type, name
-        return type(self)(x_limits,function_type,param_dict,name)
 
     def _setFunction(self):
         x_limits = self._x_limits
@@ -62,7 +21,7 @@ class RooFitVar:
 
         for k,v in x_limits.items():
             if not isinstance(v,(list,type(self))):
-                raise TypeError(f"wrong type of 'x_limits' dict_value. It must be list or RooFitVar. {type(v)}")
+                raise TypeError("wrong type of 'x_limits' dict_value. It must be list or RooFitVar")
             if isinstance(v,list):
                 if not len(v) == 2:
                     raise ValueError("length of 'x_limits' dict_value is wrong. It must be equal two")
@@ -83,44 +42,31 @@ class RooFitVar:
         
         container = []
         for k,v in param_dict.items():
-            if not isinstance(v,(list,type(self),RooFitFunction,int,float)):
-                raise TypeError(f"wrong type of 'param_dict' dict_value. It must be list / RooFitVar / RooFitFunction / int / float but {type(v)} is assigned")
-            if not k in function_type and not function_type == 'poly' and not function_type == 'step':
+            if not isinstance(v,(list,type(self),int,float)):
+                raise TypeError("wrong type of 'param_dict' dict_value. It must be list / RooFitVar / int / float")
+            if not k in function_type and not function_type == 'poly':
                 raise ValueError("'function_type' is not correct. There are not used parameters")
             if isinstance(v,(int,float)):
                 v = [v]
             if isinstance(v,list):
-                if not function_type == 'step':
-                    if not len(v) in [1,3]:
-                        raise ValueError("length of 'param_dict' dict_value is wrong. It must be equal one or three")
-                    if len(v) == 1 or v[1] == v[2]:
-                        container.append(ROOT.RooRealVar(k,k,v[0]))
-                    else:
-                        container.append(ROOT.RooRealVar(k,k,v[0],v[1],v[2]))
+                if not len(v) in [1,3]:
+                    raise ValueError("length of 'param_dict' dict_value is wrong. It must be equal one or three")
+                if len(v) == 1 or v[1] == v[2]:
+                    container.append(ROOT.RooRealVar(k,k,v[0]))
                 else:
-                    container += v
+                    container.append(ROOT.RooRealVar(k,k,v[0],v[1],v[2]))
             else:
 #                isRooFitVar = True
                 container.append(v.get_function())
 
 #       if not function_type == 'poly' and not isRooFitVar:
-        if not function_type == 'poly' and not function_type == 'step':
+        if not function_type == 'poly':
             container += x
-        else:
-            if not len(x) == 1:
-                raise AttributeError(f"wrong number of arguments in the polynomial. Only one-dimensional polynomial primitives is allowed!! ")
 
         if function_type == 'poly':
 #           If lowestOrder is not zero, then the first element in coefList is interpreted as the 'lowestOrder' coefficient and all subsequent coefficient elements are shifted by a similar amount. 
 #           It is useful if we want polynomials with arbitrary powers of x 
             return x, container, ROOT.RooPolyVar(var_name,var_name,*x,container,lowestOrder=self._lowestOrder)
-        elif function_type == 'step':
-            if len(container) % 2 == 0:
-                raise ValueError("length of 'param_dict' for step function must be odd")
-            number_of_bins = int((len(container)-1)/2)
-            if not (len(container[number_of_bins:]) - len(container[:number_of_bins])) == 1:
-                raise ValueError("list of bin bounds must be one more than list of weghts in the 'param_dict'")
-            return x, container, ROOT.RooStepFunction(var_name,var_name,*x,container[:number_of_bins],container[number_of_bins:])
         else:
             return x, container, ROOT.RooFormulaVar(var_name,function_type,container)
 
@@ -156,24 +102,6 @@ class RooFitVar:
     def get_container(self):
         return self._container
 
-    def __add__(self, other):
-        return self._arithmetic(other, "+")
-
-    def __radd__(self, other):
-        return self + other
-
-    def __sub__(self,other):
-        return self._arithmetic(other,"-")
-
-    def __rsub__(self,other):
-        return self - other
-
-    def __mul__(self, other):
-        return self._arithmetic(other, "*")
-
-#    def __rmul__(self, other):
-#        return self * other
-
 
 class RooFitFunction:
 
@@ -200,12 +128,6 @@ class RooFitFunction:
         elif marker == 'composition':
             obj = next(iter(functionality.keys()))
             x = obj.get_x()            
-#        elif not marker is None and 'wrapper' in marker:
-#            if not isinstance(functionality,dict):
-#                x = functionality.get_x()
-#                x = list(functionality.keys())[0].get_x()
-#            else:
-#                x = functionality.get_x()
         else:
             for k,v in x_limits.items():
                 if not isinstance(v,(list,RooFitVar,type(self))):
@@ -233,15 +155,9 @@ class RooFitFunction:
         container = []
         if not isinstance(param_dict,dict):
             raise TypeError("wrong type of 'param_dict'. It must be dict")
-            
-        if not marker is None and 'wrapper' in marker:
-            if isinstance(functionality,dict):
-                container = list(functionality.keys())[0].get_container()
-            else:
-                container = functionality.get_container()
-        elif marker == 'convolution' or marker == 'ord_mul' or marker == 'cond_mul':
-#            container = list(np.unique(functionality[0].get_container() + functionality[1].get_container()))
-            container = list(set(functionality[0].get_container() + functionality[1].get_container()))
+                
+        if marker == 'convolution' or marker == 'ord_mul' or marker == 'cond_mul':
+            container = list(np.unique(functionality[0].get_container() + functionality[1].get_container()))
         else:
             indices = []
             for k,v in param_dict.items():
@@ -266,8 +182,7 @@ class RooFitFunction:
                         if arg.GetName() == k:
                             container.append(arg)
         if marker == 'add':
-#            container  = list(np.unique(functionality[0].get_container() + functionality[1].get_container())) + container[:-2:-1]
-            container = list(set(functionality[0].get_container() + functionality[1].get_container()))
+            container  = list(np.unique(functionality[0].get_container() + functionality[1].get_container())) + container[:-2:-1]
         elif marker == 'composition':
             obj = next(iter(functionality.keys()))
             initial_container = obj.get_container()
@@ -284,15 +199,7 @@ class RooFitFunction:
         marker = self._marker
         functionality = self._functionality
 
-        if not marker is None and 'wrapper' in marker:
-            selfNormalized = True if marker.split('_')[1] == 'True' else False 
-            if functionality is None:
-                raise ValueError("parameter 'functionality' must be defined")
-            elif isinstance(functionality,dict):
-                return ROOT.RooWrapperPdf(function_name,function_type,list(functionality.keys())[0].get_function(),selfNormalized=selfNormalized)
-            else:
-                return ROOT.RooWrapperPdf(function_name,function_type,functionality.get_function(),selfNormalized=selfNormalized)
-        elif marker == 'add':
+        if marker == 'add':
             if functionality is None:
                 raise ValueError("parameter 'functionality' must be defined")
             else:
@@ -310,13 +217,13 @@ class RooFitFunction:
 #                return ROOT.RooNumConvPdf(function_name,function_type,*x,*functionality)
         elif marker == 'ord_mul':
             if functionality is None:
-                raise ValueError("parameter 'functionality' must be defined")
+                raise ValueError("parameter 'functions' must be defined")
             else:
                 functionality = [pdf.get_function() for pdf in functionality]
                 return ROOT.RooProdPdf(function_name,function_type,functionality)
         elif marker == "cond_mul":
             if functionality is None:
-                raise ValueError("parameter 'functionality' must be defined")
+                raise ValueError("parameter 'functions' must be defined")
             else:
 #                one_x_conditional = [ROOT.RooRealVar(k,k,v[0],v[1]) for l in functionality[0].get_functionality().values() for d in l for k,v in d.items()]
                 one_x_conditional = functionality[0].get_conditional_x()
@@ -338,33 +245,34 @@ class RooFitFunction:
                                            function_type,
                                            {functionality[1].get_function()}, 
                                            ROOT.RooFit.Conditional({functionality[0].get_function()},set(one_x_conditional),depsAreCond=True))
-#       To provide function name for composed functions (w/ conditional variables)
         function_type = function_type.split('|')[0]
-#       Dict to check correct number of parameters provided in the constructor
-        function_type_dict = {'CrystalBall':  7, 
-                              'Uniform':      0, 
-                              'BifurGauss' :  3,
-                              'BreitWigner':  2, 
-                              'Gaussian':     2,
-                              'Voigtian' :    3, 
-                              'Novosibirsk' : 3, 
-                              'Johnson' :     4}
-        right_param_dict_len = function_type_dict.get(function_type, len(self._param_dict))
-        if not len(self._param_dict) == right_param_dict_len:
-            raise TypeError(f"length of 'param_dict' dict is wrong. It must be equal {right_param_dict_len}")
-#       This behaviour could be enhanced with NN classification of function_type provided... 
-        if not function_type in function_type_dict.keys():
-            raise AttributeError(f"param 'function_type' is not implemented. It must be one in {list[function_type_dict.keys()]}")
-        if not len(x) == 1:
-            raise AttributeError(f"wrong number of arguments in the function. Only one-dimensional functional primitive is allowed!!")
-        return eval("ROOT.Roo"+function_type)(function_name,function_type,*x,*container)
+        function_type_dict = {'2sidedCB': 7, 'BFGauss': 3, 'BreitWigner': 2, 'Gauss': 2, 'Voigt' : 3, 'Novosibirsk' : 3, 'Johnson' : 4}
+        right_param_dict_len = function_type_dict.get(self._function_type, self._param_dict_len)
+#        if not len(self._param_dict) == right_param_dict_len:
+#            raise TypeError(f"length of 'param_dict' dict is wrong. It must be equal {right_param_dict_len}")
+        if function_type == '2sidedCB':
+            return ROOT.RooCrystalBall(function_name,function_type,*x,*container)
+        elif function_type == 'BFGauss':
+            return ROOT.RooBifurGauss(function_name,function_type,*x,*container)
+        elif function_type == 'BreitWigner':
+            return ROOT.RooBreitWigner(function_name,function_type,*x,*container)
+        elif function_type == 'Gauss':
+            return ROOT.RooGaussian(function_name,function_type,*x,*container)
+        elif function_type == 'Voigt':
+            return ROOT.RooVoigtian(function_name,function_type,*x,*container)
+        elif function_type == 'Novosibirsk':
+            return ROOT.RooNovosibirsk(function_name,function_type,*x,*container)
+        elif function_type == 'Johnson':
+            return ROOT.RooJohnson(function_name,function_type,*x,*container)
+        elif function_type == 'Chebychev':
+            return ROOT.RooChebychev(function_name,function_type,*x,container)
 
-
-    def __init__(self, name : str, x_limits: dict, function_type: str, param_dict: dict):
+    def __init__(self, name : str, x_limits: dict, function_type: str, param_dict: dict, param_dict_len: int = 0):
         self._function_name = name
         self._x_limits = x_limits
         self._function_type = function_type
         self._param_dict = param_dict
+        self._param_dict_len = param_dict_len
         self._functionality = self._FUNCTIONALITY
         self._marker = self._MARKER
         self._x, self._container = self._setBase()
@@ -389,9 +297,7 @@ class RooFitFunction:
         if isinstance(self._functionality,dict):
             return list(self._functionality.values())[0]
         elif isinstance(self._functionality,list):
-            conditional_x = set(self._functionality[0].get_conditional_x() + self._functionality[1].get_conditional_x())
-            x = set(self._functionality[0].get_x() + self._functionality[1].get_x())
-            return list(conditional_x - x)
+            return self._functionality[0].get_conditional_x() + self._functionality[1].get_conditional_x()
         else:
             return []
 
@@ -427,11 +333,12 @@ class RooFitFunction:
         name = self.get_name() + ' + ' + other.get_name() if name is None else name
         function_type = "(+)".join([self.get_function_type(),other.get_function_type()])
         param_dict = {**self.get_param_dict(),**other.get_param_dict(),**frac_parameter}
+        param_dict_len = len(self._param_dict) + len(other._param_dict) + 1        
         x_limits = self.get_x_limits()
         functionality = [self,other]
         setattr(type(self),'_FUNCTIONALITY',functionality)
         setattr(type(self),'_MARKER',"add")
-        obj = type(self)(name, x_limits, function_type, param_dict)
+        obj = type(self)(name, x_limits, function_type, param_dict, param_dict_len)
         setattr(type(self),'_FUNCTIONALITY',None)
         setattr(type(self),'_MARKER',None)
         return obj
@@ -450,11 +357,12 @@ class RooFitFunction:
         name = self.get_name() + ' X ' + other.get_name() if name is None else name
         function_type = "(X)".join([self.get_function_type(),other.get_function_type()])
         param_dict = {**self.get_param_dict(),**other.get_param_dict()}
+        param_dict_len = len(self._param_dict) + len(other._param_dict)
         x_limits = self.get_x_limits()
         functionality = [self,other]
         setattr(type(self),'_FUNCTIONALITY',functionality)
         setattr(type(self),'_MARKER',"convolution")
-        obj = type(self)(name, x_limits, function_type, param_dict)
+        obj = type(self)(name, x_limits, function_type, param_dict, param_dict_len)
         setattr(type(self),'_FUNCTIONALITY',None)
         setattr(type(self),'_MARKER',None)
         return obj
@@ -484,11 +392,12 @@ class RooFitFunction:
                 param_dict[k] = RooFitVar(v.get_x_limits(),f"{k}*({v.get_name()})",{k:param_dict[k], v.get_name():v},f"{k}:{v.get_name()}")
 
         function_type = self.get_function_type() + f"|({','.join(map(str,(*postfix,)))})"
+        param_dict_len = len(self.get_param_dict())
         x_limits = self.get_x_limits()
        # list of condtional arguments (w/o duplicates)
         for i,y in enumerate(y_limits):
             for y1 in y_limits[:i:-1]:
-                if id(y) == id(y1):
+                if id(y) == id(y1) :
                     y_limits.remove(y1)
 #        print("y-limits = ", y_limits)
         functionality = {self : y_limits}
@@ -496,12 +405,12 @@ class RooFitFunction:
             raise ValueError("Please make composition only with simple RooFitFunction objects (not added, convolved, multiplied)!!!")
         setattr(type(self),'_FUNCTIONALITY',functionality)
         setattr(type(self),'_MARKER',"composition")
-        obj = type(self)(name, x_limits, function_type, param_dict)
+        obj = type(self)(name, x_limits, function_type, param_dict, param_dict_len)
         setattr(type(self),'_FUNCTIONALITY',None)
         setattr(type(self),'_MARKER',None)
         return obj
 
-    def __mul__(self, other):
+    def __mul__(self,other):
 #        def str_set(s: List[str]):
 #            if not isinstance(s,list):
 #                raise TypeError("wrong type of positional argument provided. It must be 'List[str]'")
@@ -513,11 +422,8 @@ class RooFitFunction:
 #            else:
 #                return set(s)
 
-        if not isinstance(other, (type(self),RooFitVar)):
-            raise ArithmeticError("Wrong type of instance. It must be RooFitFunction or RooFitVar")
-
-        if isinstance(other, RooFitVar):
-            return other._arithmetic(self,"*")
+#        if not isinstance(other, type(self)):
+#            raise TypeError("wrong type of instance. It must be RooFitFunction")
 
         for x1 in self.get_x():
             for x2 in other.get_x():
@@ -528,9 +434,6 @@ class RooFitFunction:
         standard_arguments = [set(obj.get_x()) for obj in (self,other)]
 #        conditional_arguments = [str_set(','.join(list(map(lambda s: s[2:-1],re.findall(r'\|\([a-z,]+\)',obj.get_function_type())))).split(',')) for obj in (self,other)]
         conditional_arguments = [set(obj.get_conditional_x()) for obj in (self,other)]
-
-        if standard_arguments[0] & standard_arguments[1]:
-            raise ValueError(f"PDF multiplication is allowed only for functions w/ different arguments. But PDF1 has {standard_arguments[0]} and PDF2 - {standard_arguments[1]}")
 
 #       common multiplication (no conditional arguments)
 #       functionality  - list of self and other
@@ -560,15 +463,13 @@ class RooFitFunction:
 #        functionality = [self,other]
         name = self.get_name() + ' * ' + other.get_name()
         param_dict = {**self.get_param_dict(),**other.get_param_dict()}
+        param_dict_len = len(self._param_dict)
         x_limits = {**self.get_x_limits(), **other.get_x_limits()}
         setattr(type(self),'_FUNCTIONALITY',functionality)
-        obj = type(self)(name,x_limits,function_type,param_dict)
+        obj = type(self)(name,x_limits,function_type,param_dict,param_dict_len)
         setattr(type(self),'_FUNCTIONALITY',None)
         setattr(type(self),'_MARKER',None)
         return obj
-
-    def __rmul__(self, other):
-        return self * other
 
     def set_fixed(self,fixed_parameters: dict):
         keys = list(self._param_dict.keys())
@@ -600,64 +501,32 @@ class RooFitFunction:
 
 
 if __name__ == "__main__":
-    def make_examples(num : int = 1):
-# Main functionality No.1
-        if num == 1:
-# Delta E 1-dim RooFit function
-            de_cb = RooFitFunction('CrystalBall',{'dE' : [-.15,.15]}, 'CrystalBall', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.02,0.005,0.05], 'sigmacbR': [0.02,0.005,0.05], 
-                'alphaL': [0.1,0.005,2], 'alphaR': [0.1,0.005,2], 'nL' : [1,0.1,20.], 'nR' : [1,0.1,20.]})
-            de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BifurGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.1,0.001,0.05]})
+    # Delta E 1-dim RooFit function test
+    de_cb = RooFitFunction('CrystalBall',{'dE' : [-.15,.15]}, '2sidedCB', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.02,0.005,0.05], 'sigmacbR': [0.02,0.005,0.05], 
+        'alphaL': [0.1,0.005,2], 'alphaR': [0.1,0.005,2], 'nL' : [1,0.1,20.], 'nR' : [1,0.1,20.]})
+    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BFGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.01,0.001,0.05], 'sigmaR': [0.1,0.001,0.05]})
 
-            x0cb_function = RooFitVar({'mom': [0.74,.855]}, 'p1*(mom-0.7826)+p0', {'p1' : [0.1,0.,1.], 'p0' : [0,-0.1,0.1]},"x0CB_func")
-            de_cb = de_cb.get_composition({'x0CB' : x0cb_function})
-            de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
+    x0cb_function = RooFitVar({'mom': [0.74,.855]}, 'p1*(mom-0.7826)+p0', {'p1' : [0.1,0.,1.], 'p0' : [0,-0.1,0.1]},"x0CB_func")
+    de_cb = de_cb.get_composition({'x0CB' : x0cb_function})
+    de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
 
-# Omega 1-dim RooFit function 
-            mom_bw = RooFitFunction('BreitWigner', {'mom': [0.74,.855]}, 'BreitWigner', {'mean' : [0.78265,0.77,0.79], 'width' : [0.0085,0,0]})
-            mom_cb = RooFitFunction('CrystalBall', {'all': mom_bw}, 'CrystalBall', {'x0CB' : [0,0,0], 'sigcbL' : [0.005,0.001,0.05], 'sigcbR' : [0.005,0.001,0.05], 
-                'alphaL' : [1,0.005,2], 'alphaR' : [1,0.005,2], 'nL' : [1,0.01,50.], 'nR' : [1,0.01,50.]})
-            mom_pdf  = mom_bw.get_convolution(mom_cb)
+    # Omega 1-dim RooFit function test
+    mom_bw = RooFitFunction('BreitWigner', {'mom': [0.74,.855]}, 'BreitWigner', {'mean' : [0.78265,0.77,0.79], 'width' : [0.0085,0,0]})
+    mom_cb = RooFitFunction('CrystalBall', {'all': mom_bw}, '2sidedCB', {'x0CB' : [0,0,0], 'sigcbL' : [0.005,0.001,0.05], 'sigcbR' : [0.005,0.001,0.05], 
+        'alphaL' : [1,0.005,2], 'alphaR' : [1,0.005,2], 'nL' : [1,0.01,50.], 'nR' : [1,0.01,50.]})
+    mom_pdf  = mom_bw.get_convolution(mom_cb)
 
-# Example of nested convolution and composition 
-            de_poly = RooFitVar({'dE' : [-.15,.15]}, 'p0+p1*dE+p2*dE**2', {"p0" : [5.,5.,5.], "p1" : [-2.,-2.,-2.], "p2" : [3.,3.,3.]}, "poly3")
-            mom_de_poly_pdf = mom_bw.get_convolution(mom_cb.get_composition({'sigcbL' : de_poly}))
+    # Example of nested compositions and shared parameters
+    de_poly = RooFitVar({'dE' : [-.15,.15]}, 'p0+p1*dE+p2*dE**2', {"p0" : [5.,5.,5.], "p1" : [-2.,-2.,-2.], "p2" : [3.,3.,3.]}, "poly3")
+    mom_de_poly_pdf = mom_bw.get_convolution(mom_cb.get_composition({'sigcbL' : de_poly}))
 
-# (Delta E - Omega) RooFit uncorr. product 
-            de_mom_uncorr_pdf = de_pdf * mom_pdf
+    # (Delta E - Omega) RooFit uncorr. product 
+    de_mom_uncorr_pdf = de_pdf * mom_pdf
 
-# (Delta E - Omega) RooFit one-sided conditional product
-            de_mom_1cond_pdf = mom_de_poly_pdf * de_pdf
+    # (Delta E - Omega) RooFit one-sided conditional product
+    de_mom_1cond_pdf = mom_de_poly_pdf * de_pdf
 
-            print("Main functionality No.1 :", de_mom_1cond_pdf.get_function_type())
-# Main functionality No.2
-        elif num == 2:
-            mu = RooFitVar({'y' : [-1,1]}, 'p1*y', {'p1' : [1,1,1]},'mu_function')
-            sigma = RooFitVar({'all' : mu}, 'p0+p1*y', {'p0' : [0.5,0.5,0.5], 'p1' : [1,1,1]},'sigma_function')
-            gauss_xy = RooFitFunction('Gauss_xy', {'x' : [-6,6], }, 'Gaussian', {'mu' : [0,-1,1], 'sigma' : [1,0.5,1.5]})
-            gauss_xy = gauss_xy.get_composition({'mu' : mu, 'sigma' : sigma})
-            uniform_y = RooFitFunction('Uniform_y', {'all' : mu}, 'Uniform', {})
-            f_xy = gauss_xy * uniform_y
-            print("Main functionality No.2 :", f_xy.get_function_type())
-# Main funcitonality No.3
-        elif num == 3:
-            x0cb = RooFitVar({'mom': [0.74,.855]}, 'p1*(mom-0.7826)+p0', {'p1' : [0.1,0.,1.], 'p0' : [0,-0.1,0.1]},"x0CB")
-            x1cb = RooFitVar({'all' : x0cb}, 'p12*(mom-0.7826)**2+p11*(mom-0.7826)+p10', {'p10' : [-1,-2,0], 'p11' : [0.5,0.,1.], 'p12' : [0,-0.1,0.1]},"x1CB")
-            bw = RooFitFunction('BreitWigner', {'all': x0cb}, 'BreitWigner', {'mean' : [0.78265,0.77,0.79], 'width' : [0.0085,0,0]})
-            bw_x0cb = bw * x0cb
-            x0cb_bw = x0cb * bw
-            x0cb_x1cb = x0cb * x1cb
-            x0cb_p_bw =  x0cb + bw
-            bw_p_x0cb = bw + x0cb
-            pdf = wrapped(bw*x0cb)
-            print("Main functionality No.3 :", bw_x0cb.get_name(),x0cb_bw.get_name(),x0cb_x1cb.get_name(),x0cb_p_bw.get_name(),bw_p_x0cb.get_name())
-            print("Main functionality No.3 :",pdf.get_name())
+    print(de_mom_1cond_pdf.get_function_type())
 
-            mu = RooFitVar({'y' : [-1,1]}, 'p1*y', {'p1' : [1,1,1]},'mu_function')
-            null_func = RooFitVar({'all':mu}, '0',{},'0')
-            print(null_func.get_name())
 
-    make_examples(1)
-    make_examples(2)
-    make_examples(3)
-            
 
