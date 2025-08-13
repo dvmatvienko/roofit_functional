@@ -68,16 +68,39 @@ We could easily create the pull plot in addition to the basic plot in one-line c
 ![](./pull.png)
 
 
+All PDFs are constructed on the basis of step-to-step procedure in the RooFit framework. 
+The first step is associated with elementary PDFs, which are hard-coded. 
 
-All the probability density functions (PDFs) are constructed on the basis of step-to-step procedure. 
-This procedure is based on elementary PDFs, which arehard-coded in the frame of the RooFit package.
-Structure of the elementary PDFs could be sequentially complicated via four available actions: summation, multiplication, convolution and composition. 
+The full list of available elementary PDFs is as follows (to be updated):
+
+- CrystalBall
+  
+- Uniform
+  
+- BifurGauss
+  
+- BreitWigner
+  
+- Gaussian
+  
+- Voigtian
+  
+- Novosibirsk
+  
+- Johnson
+
+The possibility to include any custom PDF is put in TODO list. 
+
+Structure of the elementary PDFs could be sequentially complicated via four base actions: summation, multiplication, convolution and composition. 
 Besides PDF function, an ordinary function (not normalized in the range of its arguments) is also supported. 
 
 Let us consider actions for PDF functions in a more detail:
 
-1. Summation of two or more PDF functions. This action is a straightforward.
+1. Summation of two or more PDF functions. `sum_of_pdfs = pdf1.get_add(pdf2,{'frac': [0.5,0.,1.]})`
+   Fraction of the pdf2 to the pdf1 is important to achieve the unity normalization of the sum_of_pdfs
 
 2. 
+
+4. 
 
 
