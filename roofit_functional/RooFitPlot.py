@@ -5,7 +5,10 @@ import re
 
 class RooFitPlot:
     @staticmethod
-    def get_object_map(pdf, pdf_mother = None, d = None, level = 0):
+    def get_object_map(pdf, 
+                       pdf_mother = None, 
+                       d = None, 
+                       level = 0):
         if pdf_mother == None and d == None:
             d = {}
             pdf_mother = pdf
@@ -19,7 +22,17 @@ class RooFitPlot:
                     RooFitPlot.get_object_map(list(pdf.get_functionality()[i].keys())[0], pdf_mother = pdf, d = d, level = i)
         return d
 
-    def __init__(self, data, pdf, projection : str, title : str | Tuple, data_options : dict | None = None, pdf_options : dict | None = None, Range : Tuple = tuple(), Slice : dict[str,Tuple] | None = None, Bins : int | None = None, isHistogram : bool = False):
+    def __init__(self, 
+                 data, 
+                 pdf, 
+                 projection : str, 
+                 title : str | Tuple, 
+                 data_options : dict | None = None, 
+                 pdf_options : dict | None = None, 
+                 Range : Tuple = tuple(), 
+                 Slice : dict[str,Tuple] | None = None, 
+                 Bins : int | None = None, 
+                 isHistogram : bool = False):
         data_options = data_options if not data_options is None else {}
         pdf_options = pdf_options if not pdf_options is None else {}
 
@@ -27,11 +40,13 @@ class RooFitPlot:
         self._pdf_options = pdf_options
         self._projection = projection
 
-        if not any([x.GetName() == projection for x in pdf.get_x()]):
+        self._x = pdf.get_x()
+
+        if not any([x.GetName() == projection for x in self._x]):
             raise ValueError("wrong name of 'projection' variable. It must be coincides with the 'pdf' arguments!")
 
         frame = None
-        for x in pdf.get_x():
+        for x in self._x:
             if x.GetName() == projection:
                 if len(Range) == 0:
                     Range = tuple(x.getRange())
@@ -43,13 +58,16 @@ class RooFitPlot:
                 break
 
         if not Slice is None:
-           for k, v in Slice.items():
-               if not isinstance(v,tuple):
-                   raise TypeError("slice values must have 'tuple' type!")
-               for x in pdf.get_x():
-                   if x.GetName() == k:
-                       print('id(mom) in RooFitPlot', id(x))
-                       x.setRange('slice', *v)
+            slices = []
+            for k, v in Slice.items():
+                if not isinstance(v,tuple):
+                    raise TypeError("slice values must have 'tuple' type!")
+                for i,x in enumerate(self._x):
+                    if x.GetName() == k:
+                        x.setRange('slice', *v)
+#                        x.setRange('aux_slice_l', x.getMin(),v[0])
+#                        x.setRange('aux_slice_r', v[1],x.getMax())
+                        self._x[i] = x
 
         #{'r': 'kRed', 'b': 'kBlue', 'g': 'kGreen', 'y': 'kYellow', 'w': 'kWhite', 'k': 'kBlack', 'm': 'kMagenta', 'c': 'kCyan'}
         colors = {0 : 'r', 1 : 'b', 2 : 'g', 3 : 'm', 4 : 'c'}
@@ -155,19 +173,28 @@ class RooFitPlot:
     def get_frame(self):
         return self._frame
 
-    def set_paramOn(self,pdf_options : dict = {}):
+    def set_paramOn(self,
+                    pdf_options : dict = {}):
         pdf = self._pdf
         frame = self._frame
         pdf.get_function().paramOn(frame,**pdf_options)
         self._frame = frame
 
-    def set_statOn(self,stat_options : dict = {}):
+    def set_statOn(self,
+                   stat_options : dict = {}):
         data = self._data
         frame = self._frame
-        data.statOn(frame,**stat_options)
+        slice_option = {k : v for k,v in self._data_options.items() if k == 'CutRange'}
+        print(slice_option)
+        data.get_dataset().statOn(frame,**{**stat_options,**slice_option})
+#        data.get_dataset().statOn(frame,**stat_options)
         self._frame = frame
 
-    def make_plot(self,filename='file.pdf',rootfile='file.root',log=False):
+    def make_plot(self,
+                  filename = 'plot',
+#                  rootfile = 'plot.root',
+                  pdf_format = True, 
+                  log = False):
         frame = self._frame
         c = ROOT.TCanvas("canvas","canvas",800,600)
         if log: 
@@ -175,20 +202,25 @@ class RooFitPlot:
             frame.SetMinimum(0.1)
         ROOT.gPad.SetLeftMargin(0.15)
         frame.Draw()
+        ext =  ".pdf" if pdf_format else ".png"
+        filename += ext
         c.SaveAs(filename)
 
-        f = ROOT.TFile(rootfile,"RECREATE")
-        frame.Write()
-        f.Close()
+#        f = ROOT.TFile(rootfile,"RECREATE")
+#        frame.Write()
+#        f.Close()
 
-    def make_pullplot(self,filename='pull.pdf',log=False):
+    def make_pullplot(self,
+                      filename = 'pull',
+                      pdf_format = True, 
+                      log = False):
         data = self._data
         pdf = self._pdf
         projection = self._projection
         frame = self._frame
 
         pullframe = None
-        for x in pdf.get_x():
+        for x in self._x:
            if x.GetName() == projection:
                pullframe = x.frame(Title="Pull distribution")
                xmin, xmax = tuple(x.getRange())
@@ -222,21 +254,27 @@ class RooFitPlot:
         c.Divide(1,2)
         c.cd(1).SetPad(0.005,0.2525,0.995,0.995)
         frame.Draw()
-        c.cd(2).SetPad(0.005,0.005,0.995,0.2525);
-        pullframe.Draw();
-        line_central.Draw("SAME");
-        line_low.Draw("SAME");
-        line_high.Draw("SAME");
+        c.cd(2).SetPad(0.005,0.005,0.995,0.2525)
+        pullframe.Draw()
+        line_central.Draw("SAME")
+        line_low.Draw("SAME")
+        line_high.Draw("SAME")
+        ext =  ".pdf" if pdf_format else ".png"
+        filename += ext
         c.SaveAs(filename)
         
     def make_smart_binning(self):    
         pass
 
-    def make_2d_plot(self, name : str = '', filename = '2dplot.pdf'):
+#   Slice option is irrelevant for 2D plot 
+    def make_2d_plot(self,
+                     name : str = '', 
+                     filename = '2dplot', 
+                     pdf_format = True):
         pdf = self._pdf
-        if not len(pdf.get_x()) == 2:
-            raise AttributeError("Wrong number of arguments for pdf provided. It must be equal two")
-        x, y = tuple(pdf.get_x())
+        if not len(self._x) == 2:
+            raise AttributeError("Wrong number of arguments for pdf provided. Only two arguments in total is supported")
+        x, y = tuple(self._x)
         hh_model = pdf.get_function().createHistogram(name,x,Binning=50,YVar=dict(var=y,Binning=50))
         hh_model.SetLineColor(ROOT.kBlue)
     
@@ -246,7 +284,9 @@ class RooFitPlot:
         hh_model.GetZaxis().SetTitleOffset(2.5)
         hh_model.GetXaxis().SetTitleOffset(2)
         hh_model.GetYaxis().SetTitleOffset(2)
-        hh_model.Draw("surf")
+        hh_model.Draw("surf1")
+        ext =  ".pdf" if pdf_format else ".png"
+        filename += ext
         c.SaveAs(filename)
 
 #   Calculate and return reduced chi-squared  (neyman ?) between a last added curve and a histogram (total ones by default in constructor) in a RooPlot 'frame' object
@@ -256,30 +296,31 @@ class RooFitPlot:
         return frame.chiSquare(pdf.get_NFitFloated())    
 
 if __name__ == "__main__":
-    from RooFitFunction import RooFitFunction, RooFitVar
-    from RooFitData import RooFitData
-    from RooFitMaker import RooFitMaker
+    from roofit_functional.RooFitFunction import RooFitFunction, RooFitVar
+    from roofit_functional.RooFitData import RooFitData
+    from roofit_functional.RooFitMaker import RooFitMaker
 
     # Delta E 1-dim RooFit function test
-    de_cb = RooFitFunction('CrystalBall',{'dE' : [-.15,.15]}, '2sidedCB', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.03,0.001,0.05], 'sigmacbR': [0.01,0.001,0.05],
+    de_cb = RooFitFunction('CrystalBall',{'dE' : [-.15,.15]}, 'CrystalBall', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.03,0.001,0.05], 'sigmacbR': [0.01,0.001,0.05],
         'alphaL': [0.1,0.005,10], 'nL' : [1,0.1,20.], 'alphaR': [0.1,0.005,10], 'nR' : [1,0.1,20.]})
-    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BFGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.02,0.01,0.05], 'sigmaR': [0.02,0.01,0.05]})
+    de_bfGauss = RooFitFunction('Gauss',{'all' : de_cb}, 'BifurGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.02,0.01,0.05], 'sigmaR': [0.02,0.01,0.05]})
     de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
 
     # Omega 1-dim RooFit function test
     mom_bw = RooFitFunction('BreitWigner', {'mom': [0.74,0.87]}, 'BreitWigner', {'mean' : [0.78,0,0], 'width' : [0.0085,0,0]})
-    mom_Gauss = RooFitFunction('MGauss', {'all' : mom_bw}, 'Gauss', {'mmeang' : [0,0,0], 'msigmag': [0.007,0.001,0.01]})
+    mom_Gauss = RooFitFunction('MGauss', {'all' : mom_bw}, 'Gaussian', {'mmeang' : [0,0,0], 'msigmag': [0.007,0.001,0.01]})
     mom_pdf  = mom_bw.get_convolution(mom_Gauss,"test")
 
     # (Delta E - Omega) RooFit uncorr. product
     de_mom_uncorr = de_pdf*mom_pdf
 
-    data = de_mom_uncorr.get_function().generate(set(de_mom_uncorr.get_x()),100000)
-    binned_data = RooFitData("test","binned",data,de_mom_uncorr.get_x(),bins=[50,50])
+#    data = de_mom_uncorr.get_function().generate(set(de_mom_uncorr.get_x()),100000)
+    binned_data = RooFitData("test","binned",(de_mom_uncorr,10000),de_mom_uncorr.get_x(),bins=[50,50])
     r = RooFitMaker(binned_data,de_mom_uncorr,"NLL")
     r.dump_to_file()
-    p = RooFitPlot(binned_data,de_mom_uncorr,"dE","Test plot",Slice={'mom' : (0.778,0.786)})
+    p = RooFitPlot(binned_data,de_mom_uncorr,"dE","Test plot",Slice={'mom' : (0.776,0.786)})
 #    p = RooFitPlot(binned_data,de_mom_uncorr,"dE","Test plot")
+    p.set_paramOn()
 #    p.make_plot()
     p.make_pullplot()
 #    p.make_2d_plot()
