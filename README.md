@@ -2,7 +2,7 @@
 roofit-functional is a python wrapper for [RooFit framework](https://root.cern/manual/roofit/) which models the expected distribution of events in data analysis. 
 
 
-# Desription
+# Description
 RooFit implements classes that represents variables, probability density functions (PDFs) and operators to compose higher level functions. 
 All classes are instrumented to be fully functional: fitting, plotting and toy event generation works the same way for every PDF regardless of its complexity. 
 Some important parts of the underlying functionality are delegated to standard ROOT library. 
@@ -45,11 +45,27 @@ xframe.Draw()
 c.SaveAs("basics.png")
 ```
 
+![](./basics.png)
+
 This python interface requires multiline code to create variables, model parameters, PDF and make some actions, such as toy
 data generation, fitting and plotting. 
 roofit-functional allows to significantly shorten the code which makes similar actions but has flexible structure. 
 
 Let us rewrite the code shown above in roofit-functional manner. 
+
+```
+import roofit_functional as rff
+
+gauss = rff.RooFitFunction('Gauss', {'x' : [-10,10]}, 'Gaussian', {'mean' : [1,-10,10], 'sigma' : [1,0.1,10]})
+data = rff.RooFitData("data","unbinned",(gauss,10000),gauss.get_x())
+r = rff.RooFitMaker(data,gauss,"NLL")
+p = rff.RooFitPlot(data,gauss,"x","Gaussian pdf with data")
+p.make_plot()
+```
+
+We could easily create the pull plot in addition to the basic plot in one-line code: `p.make_pullplot()`
+
+![](./pull.png)
 
 
 
