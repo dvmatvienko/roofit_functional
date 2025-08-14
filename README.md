@@ -1,19 +1,67 @@
 # roofit_functional
-roofit-functional is a python wrapper for [RooFit framework](https://root.cern/manual/roofit/) which models the expected distribution of events in data analysis. 
+roofit-functional is a python wrapper (with extended functionality) for [RooFit framework](https://root.cern/manual/roofit/) 
+which models the expected distribution of events in data analysis based on 
+maximum-likelihood (ML) method. The data sample could be multi-dimensional, and has one or more measured (and correlated) observables associated with it.
+It was initially created for elementary particle physics but it has universal application for tabular data of arbitrary nature.
+roofit-functional has class `RooFitData` which converts various data formats (numpy, pandas, ROOT histogram, RDataFrame, ASCII file and etc.) to the 
+internal data container and could generate new data obeyed fitted distribution of input data. It also has function `digit_function` which converts fitted probability
+density of data to numpy array and supports rectangular subrange of data sample. 
 
 
 # Description
-RooFit implements classes that represents variables, probability density functions (PDFs) and operators to compose higher level functions. 
+RooFit has been initially written in C++. It implements classes that represents variables, probability density functions (PDFs) and operators to compose higher level functions. 
 All classes are instrumented to be fully functional: fitting, plotting and toy event generation works the same way for every PDF regardless of its complexity. 
-Some important parts of the underlying functionality are delegated to standard ROOT library. 
+Some important parts of the underlying functionality are delegated to standard [ROOT library](https://root.cern/) and [MINUIT optimization tool](https://root.cern.ch/download/minuit.pdf)
+
+RooFit uses PDF normalization relative to the user-defined range of variables. 
+
+```
+import numpy as np
+import roofit_functional as rff
+std_gauss = rff.RooFitFunction('Gauss',{'x' : [-3,3]}, 'Gaussian', {'mean' : [0], 'sigma': [1]})
+data = rff.RooFitData("test","unbinned",np.linspace(-3,3),std_gauss.get_x())
+rff_pdf = rff.digit_function(std_gauss,data)[1]
+```
+
+
+
+
+It differs from `scipy.stats` where full space normalization is used. 
+
+```
+import numpy as np 
+from scipy import stats
+xs = np.linspace(-3,3)
+pdf = stats.norm(0, 1).pdf(xs)
+```
+
+`rff_pdf - pdf` results to 
+
+```
+array([1.19974776e-05, 1.71937594e-05, 2.42739268e-05, 3.37596182e-05,
+       4.62533626e-05, 6.24277081e-05, 8.30041425e-05, 1.08720249e-04,
+       1.40284409e-04, 1.78318611e-04, 2.23291521e-04, 2.75445758e-04,
+       3.34725070e-04, 4.00708624e-04, 4.72560518e-04, 5.49002692e-04,
+       6.28318446e-04, 7.08391664e-04, 7.86783730e-04, 8.60846255e-04,
+       9.27863550e-04, 9.85214808e-04, 1.03054282e-03, 1.06191425e-03,
+       1.07795630e-03, 1.07795630e-03, 1.06191425e-03, 1.03054282e-03,
+       9.85214808e-04, 9.27863550e-04, 8.60846255e-04, 7.86783730e-04,
+       7.08391664e-04, 6.28318446e-04, 5.49002692e-04, 4.72560518e-04,
+       4.00708624e-04, 3.34725070e-04, 2.75445758e-04, 2.23291521e-04,
+       1.78318611e-04, 1.40284409e-04, 1.08720249e-04, 8.30041425e-05,
+       6.24277081e-05, 4.62533626e-05, 3.37596182e-05, 2.42739268e-05,
+       1.71937594e-05, 1.19974776e-05])
+
+```
+
+The difference of normalizations on a scale of 3 sigma for Gaussian is noticeable despite of the fact that 
+99.7% of probability mass lies in this region. 
 
 Here is an example of a model defined in RooFit python interface which allows the creation of bindings between Python and C++ in automatic way.
 
 ```
 import ROOT
  
-# Set up model
-# ---------------------
 # Declare variables x,mean,sigma with associated name, title, initial
 # value and allowed range
 x = ROOT.RooRealVar("x", "x", -10, 10)
@@ -47,20 +95,19 @@ c.SaveAs("basics.png")
 
 ![](./basics.png)
 
-This python interface requires multiline code to create variables, model parameters, PDF and make some actions, such as toy
-data generation, fitting and plotting. 
+This python interface requires multiline code to create variables, model parameters, PDF and make actions for these objects. 
 roofit-functional allows to significantly shorten the code which makes similar actions but has flexible structure. 
 
-Let us rewrite the code shown above in roofit-functional manner. 
+Let us rewrite the code shown above in the roofit-functional manner. 
 
 ```
 import roofit_functional as rff
 
 gauss = rff.RooFitFunction('Gauss', {'x' : [-10,10]}, 'Gaussian', {'mean' : [1,-10,10], 'sigma' : [1,0.1,10]})
 data = rff.RooFitData("data","unbinned",(gauss,10000),gauss.get_x())
-r = rff.RooFitMaker(data,gauss,"NLL")
+rff.RooFitMaker(data,gauss,"NLL")
 p = rff.RooFitPlot(data,gauss,"x","Gaussian pdf with data")
-p.make_plot()
+p.make_plot(filename="basics",pdf_format=False)
 ```
 
 We could easily create the pull plot in addition to the basic plot in one-line code: `p.make_pullplot()`
@@ -71,7 +118,7 @@ We could easily create the pull plot in addition to the basic plot in one-line c
 All PDFs are constructed on the basis of step-to-step procedure in the RooFit framework. 
 The first step is associated with elementary PDFs, which are hard-coded. 
 
-The full list of available elementary PDFs is as follows (to be updated):
+The full list of available elementary PDFs in roofit-functional is as follows (to be updated):
 
 - CrystalBall
   
@@ -90,17 +137,32 @@ The full list of available elementary PDFs is as follows (to be updated):
 - Johnson
 
 The possibility to include any custom PDF is put in TODO list. 
-
-Structure of the elementary PDFs could be sequentially complicated via four base actions: summation, multiplication, convolution and composition. 
+ 
 Besides PDF function, an ordinary function (not normalized in the range of its arguments) is also supported. 
+
+```
+import roofit_functional as rff
+polynomial_function = rff.RooFitVar({'x' : [-1,1]}, 'p1*x+p0', {'p0' : [0.1,0,1], 'p1' : [0.05,-0.1,0.1]}, "poly")
+# The other way to define the same polynomial function
+same_polynomial_function = rff.RooFitVar({'x' : [-1,1]}, 'poly', {'p0' : [0.1,0,1], 'p1' : [0.05,-0.1,0.1]}, "poly_same")
+```
+
+Structure of the elementary PDFs could be sequentially complicated via four base actions: summation, multiplication, convolution and composition.
+(for more description see [RooFit manual](https://root.cern.ch/download/doc/RooFit_Users_Manual_2.91-33.pdf)).
 
 Let us consider actions for PDF functions in a more detail:
 
-1. Summation of two or more PDF functions. `sum_of_pdfs = pdf1.get_add(pdf2,{'frac': [0.5,0.,1.]})`
-   Fraction of the pdf2 to the pdf1 is important to achieve the unity normalization of the sum_of_pdfs
+1. Summation of two or more PDFs. `sum_of_pdfs = pdf1.get_add(pdf2,{'frac': [0.5,0.,1.]})`
+   Fraction of the pdf2 to the pdf1 is important to achieve the normalization of the sum_of_pdfs over initially defined region. 
 
-2. 
+2. Multiplication of  two or more PDFs. `pdf1 * pdf2`
+   It could be done with simple operator '*'
 
-4. 
+3. Convolution of two PDFs. `conv_of_pdfs = pdf1.get_convolution(pdf2)`
+   For now only convolution of functions with the same variables is implemented.
+
+4. Composition of PDF and ordinary function by some parameter of the PDF. `comp_of_pdf = pdf.get_composition({'p' : ordinary_function})`
+   We need to choose some parameter of the PDF 'p', where the composition is done: PDF(x,f(y)) = composition(PDF(x,p), f(y)).
+   Composition replaces the constant PDF parameter with functional dependence of the parameter. 
 
 
