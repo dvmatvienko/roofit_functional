@@ -152,17 +152,39 @@ Structure of the elementary PDFs could be sequentially complicated via four base
 
 Let us consider actions for PDF functions in a more detail:
 
-1. Summation of two or more PDFs. `sum_of_pdfs = pdf1.get_add(pdf2,{'frac': [0.5,0.,1.]})`
-   Fraction of the pdf2 to the pdf1 is important to achieve the normalization of the sum_of_pdfs over initially defined region. 
+1. Summation of two or more PDFs.
 
-2. Multiplication of  two or more PDFs. `pdf1 * pdf2`
-   It could be done with simple operator '*'
+   `sum_of_pdfs = pdf1.get_add(pdf2,{'frac': [0.5,0.,1.]})`
 
-3. Convolution of two PDFs. `conv_of_pdfs = pdf1.get_convolution(pdf2)`
-   For now only convolution of functions with the same variables is implemented.
+   Fraction of the pdf2 to the pdf1 is important to achieve the normalization of the `sum_of_pdfs` over initially defined region. 
 
-4. Composition of PDF and ordinary function by some parameter of the PDF. `comp_of_pdf = pdf.get_composition({'p' : ordinary_function})`
-   We need to choose some parameter of the PDF 'p', where the composition is done: PDF(x,f(y)) = composition(PDF(x,p), f(y)).
-   Composition replaces the constant PDF parameter with functional dependence of the parameter. 
+2. Multiplication of two or more PDFs.
+
+   `pdf1 * pdf2`
+
+   It could be done with simple operator '*'. Product of the PDFs is automatically normalized. 
+
+3. Convolution of two PDFs.
+
+   `conv_of_pdfs = pdf1.get_convolution(pdf2)`
+
+   For now only convolution of functions with the same variables is implemented and
+   numeric convolution with Fourier transforms is supported. 
+   Normalization of the convolution product is required as it is not generally normalized itself but
+   the correct normalization is achieved numerically inside the code. 
+
+5. Composition of PDF and ordinary function by some parameter of the PDF.
+
+   `comp_of_pdf = pdf.get_composition({'p' : ordinary_function})`
+
+   We need to choose some parameter of the PDF 'p', where the composition is done: $\rm{PDF}(x,f(y)) = \rm{composition}(PDF(x,p), f(y))$.
+   Composition replaces the constant PDF parameter with functional dependence of the parameter.
+   This is a way to compose a conditional PDF(x|y) which differs from the ordinary PDF(x,y) by normalization.
+   Normalization of PDF(x,y) is $\int\rm{PDF}(x,y) dx dy = 1$ whereas for conditional PDF(x|y):
+   $\int\rm{PDF}(x|y) dx = 1$  for each value of y. Conditional PDF describes correlated random variables and it could 
+
+
+
+
 
 
