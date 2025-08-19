@@ -1,15 +1,19 @@
 # roofit_functional
-roofit-functional is a python wrapper (with extended functionality) for [RooFit framework](https://root.cern/manual/roofit/) 
+roofit_functional is a user-friendly python library aiming to simplify work with [RooFit framework](https://root.cern/manual/roofit/) 
 which models the expected distribution of events in data analysis based on 
 maximum-likelihood (ML) method. The data sample could be multi-dimensional, and has one or more measured (and correlated) observables associated with it.
 It was initially created for elementary particle physics but it has universal application for tabular data of arbitrary nature.
 
-roofit-functional is designed to integrate features from RooFit with C++ interface and python-native packages analyzing tabular data 
-(numpy, scipy.stats, pandas, matplotlib, seaborn, iminuit, scikit-learn and etc.) in one place.
+roofit_functional is designed to combine multiple RooFit features in one place. RooFit is a complex framework with many hierarchy-structured classes and 
+variety of methods and parameters inside each class. The builtin classes provide description for the most popular data distributions, their evaluations and operations 
+with them. RooFit has important functionality for processing its models by fitted to data with using 
+unbinned or binned ML (or $\chi^2$ fit), projected and plotted along with data, sampled using Monte Carlo technique. 
+This functionality is represented by C++ classes. 
+roofit_functional gives unified interface to all these operations in python manner. Only a few base classes allow the user to go through the entire 
+chain of operations from creating a function, preparing a data set, fitting to data with a function and creating informative plots.  
+Ceratinly such unification gives lower flexibility than original RooFit, because several knobs are out of roofit_functional visibility,
+but many of these knobs are rarely used and are needed in very specific places. The focus of this tool is on automating widely used features of the RooFit. 
 
-roofit-functional has class `RooFitData` which converts various tabular data formats (numpy, pandas, ROOT histogram, RDataFrame, ASCII file and etc.) to the 
-internal data container (binned or unbinned) and could generate new data obeyed fitted distribution of input data. It also has function `digit_function` which 
-converts fitted probability density of data to numpy array and supports rectangular subrange of data sample. 
 
 
 # Description
@@ -97,7 +101,7 @@ c.SaveAs("basics.png")
 ![](./basics.png)
 
 This python interface requires multiline code to create variables, model parameters, PDF and make actions for these objects. 
-roofit-functional allows to significantly shorten the code which makes similar actions but has flexible structure. 
+roofit-functional allows to significantly shorten the code which makes similar actions.  
 
 Let us rewrite the code shown above in the roofit-functional manner. 
 
@@ -111,6 +115,10 @@ p = rff.RooFitPlot(data,gauss,"x","Gaussian pdf with data")
 p.make_plot(filename="basics",pdf_format=False)
 ```
 
+roofit_functional has class `RooFitData` which converts various tabular data formats (numpy, pandas, ROOT histogram, RDataFrame, ASCII file and etc.) to the 
+internal data container (binned or unbinned) and could generate new data obeyed fitted distribution of input data. It also has function `digit_function` which 
+converts fitted probability density of data to numpy array and supports rectangular subrange of data sample.
+
 We could easily create the pull plot in addition to the basic plot in one-line code: `p.make_pullplot()`
 
 ![](./pull.png)
@@ -119,7 +127,7 @@ We could easily create the pull plot in addition to the basic plot in one-line c
 All PDFs are constructed on the basis of step-to-step procedure in the RooFit framework. 
 The first step is associated with elementary PDFs, which are hard-coded. 
 
-The full list of available elementary PDFs in roofit-functional is as follows (to be updated):
+The full list of available elementary PDFs in roofit_functional is as follows (to be updated):
 
 - CrystalBall
   
@@ -182,43 +190,43 @@ Let us consider actions for PDF functions in a more detail:
 
    `pdf1 * pdf2`
 
-   It could be done with simple operator `*`. Product of the PDFs is automatically normalized. It is true for both,
+   Product of the PDFs is automatically normalized for both,
    ordinary and conditional PDFs. Operator `*` works in the same manner for both PDF types.
 
    Here we demonstrate roofit-functional in the following demo example.
 
-
    ```
-   import roofit_functional as rff
+    # x-dim PDF as sum of two PDFs
+    x_cb =    RooFitFunction('CrystalBall',
+                             {'x' : [-.15,.15]},
+                             'CrystalBall',
+                             {'x0CB' : 0, 'sigmacb' : [0.02,0.01,0.03], 'alphaL' : 0.1, 'nL' : 1, 'alphaR' : 0.1, 'nR' : 1})
+    x_Gauss = RooFitFunction('Gauss',
+                             {'x' : x_cb},
+                             'Gaussian' ,
+                             {'mean' : 0, 'sigma': [0.05, 0.03, 0.07]})
+    x_pdf = x_cb.get_add(x_Gauss,{'frac': [0.3,0.1,0.9]})
 
-   # 1-dim CrystalBall PDF
-   de_cb = rff.RooFitFunction('CrystalBall',{'dE' : [-.15,.15]}, 'CrystalBall', {'x0CB' : [0,-0.01,0.01], 'sigmacbL': [0.03,0.001,0.05], 'sigmacbR': [0.01,0.001,0.05],
-                                                                             'alphaL': [0.1,0.005,10], 'nL' : [1,0.1,20.], 'alphaR': [0.1,0.005,10], 'nR' : [1,0.1,20.]})
-   de_bfGauss = rff.RooFitFunction('Gauss',{'all' : de_cb}, 'BifurGauss' , {'x0' : [0,-0.01,0.01], 'sigmaL': [0.02,0.01,0.05], 'sigmaR': [0.02,0.01,0.05]})
-   de_pdf = de_cb.get_add(de_bfGauss,{'frac': [0.5,0.,1.]})
+    # y-dim PDF as convolution of two PDFs
+    y_bw = RooFitFunction('BreitWigner', {'y': [0.74,0.87]}, 'BreitWigner', {'BWmean' : 0.783, 'BWidth' : 0.0085})
+    y_Gauss = RooFitFunction('MGauss', {'all' : y_bw}, 'Gaussian', {'ymean' : 0, 'ysigma': [0.007,0.001,0.015]})
+    y_pdf  = y_bw.get_convolution(y_Gauss,"y_pdf")
 
-   # 1-dim convolution of Breit-Wigner and Gaussian PDFs
-   mom_bw = rff.RooFitFunction('BreitWigner', {'mom': [0.74,0.87]}, 'BreitWigner', {'mean' : [0.78,0,0], 'width' : [0.0085,0,0]})
-   mom_Gauss = rff.RooFitFunction('MGauss', {'all' : mom_bw}, 'Gaussian', {'mmeang' : [0,0,0], 'msigmag': [0.007,0.001,0.01]})
-   mom_pdf  = mom_bw.get_convolution(mom_Gauss,"test")
+    # (x-y) uncorr. PDF product
+    product = x_pdf * y_pdf
 
-   # Product of CrystalBall and convolution PDFs
-   de_mom_uncorr = de_pdf * mom_pdf
+    # Toy data generation
+    binned_data = RooFitData("2D-binned-data","binned",(product,300000),product.get_x(),bins=[50,50],seed=1234)
 
-   # Toy data generation
-   binned_data = rff.RooFitData("test","binned",(de_mom_uncorr,10000),de_mom_uncorr.get_x(),bins=[50,50])
+    # PDF product fit to data 
+    r = RooFitMaker(binned_data,product,"NLL")
+    r.dump_to_file()
 
-   # PDF product fit to data (unbinned maximum likelihood fit)
-   r = rff.RooFitMaker(binned_data,de_mom_uncorr,"NLL")
-
-   # Save fit results to the text file
-   r.dump_to_file()
-
-   # Plot 1-d projection to 'dE' variable in the 'mom' user-defined region (slice).
-   # Superimpose data and fit results. Show pull plot. 
-   p = rff.RooFitPlot(binned_data,de_mom_uncorr,"dE","Test plot",Slice={'mom' : (0.776,0.786)})
-   p.set_paramOn()
-   p.make_pullplot()
+    # Plot x-projection for y-slice (0.76-0.80)
+    p = RooFitPlot(binned_data,product,"x","1-d x projection in y slice (0.76, 0.80)",Slice={'mom' : (0.76,0.80)})
+    p.set_paramOn()
+    p.make_pullplot()
+    p.make_2d_plot()
    ```
 
    
