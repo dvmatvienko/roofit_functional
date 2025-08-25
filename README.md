@@ -30,7 +30,7 @@ RooFit uses PDF normalization relative to the user-defined range of variables.
 import numpy as np
 import roofit_functional as rff
 std_gauss = rff.RooFitFunction('Gauss',{'x' : [-3,3]}, 'Gaussian', {'mean' : [0], 'sigma': [1]})
-data = rff.RooFitData("test","unbinned",np.linspace(-3,3),std_gauss.get_x())
+data = rff.RooFitData("test","unbinned",np.linspace(-3,3),std_gauss.x)
 rff_pdf = rff.digit_function(std_gauss,data)[1]
 ```
 
@@ -112,7 +112,7 @@ Let us rewrite the code shown above in the roofit-functional manner.
 import roofit_functional as rff
 
 gauss = rff.RooFitFunction('Gauss', {'x' : [-10,10]}, 'Gaussian', {'mean' : [1,-10,10], 'sigma' : [1,0.1,10]})
-data = rff.RooFitData("data","unbinned",(gauss,10000),gauss.get_x())
+data = rff.RooFitData("data","unbinned",(gauss,10000),gauss.x)
 rff.RooFitMaker(data,gauss,"NLL")
 p = rff.RooFitPlot(data,gauss,"x","Gaussian pdf with data")
 p.make_plot(filename="basics",pdf_format=False)
@@ -227,7 +227,7 @@ Let us consider actions for PDF functions in a more detail:
     product = x_pdf * y_pdf
 
     # Toy data generation
-    binned_data = RooFitData("2D-binned-data","binned",(product,300000),product.get_x(),bins=[50,50],seed=1234)
+    binned_data = RooFitData("2D-binned-data","binned",(product,300000),product.x,bins=[50,50],seed=1234)
 
     # PDF product fit to data 
     r = RooFitMaker(binned_data,product,"NLL")
@@ -239,13 +239,3 @@ Let us consider actions for PDF functions in a more detail:
     p.make_pullplot()
     p.make_2d_plot()
    ```
-
-   
-
-   
-
-
-
-
-
-
