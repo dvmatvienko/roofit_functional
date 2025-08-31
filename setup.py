@@ -2,8 +2,8 @@ from setuptools import setup
 
 setup(
    name='roofit_functional',
-   version='1.0.0',
-   description='python wrapper for RooFit C++ library',
+   version='0.0.1',
+   description='python module aiming to simplify work with RooFit library',
    author='Dmitry Matvienko',
    author_email='dmitry.matvienko@gmail.com',
    packages=['roofit_functional'],  #same as name
