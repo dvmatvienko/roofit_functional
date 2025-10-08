@@ -19,8 +19,8 @@ def digit_function(
         subrange: (optional) python dict defining rectangular subrange of data
 
     """
-    function = f.get_function()
-    dataset = data.get_dataset()
+    function = f.function
+    dataset = data.dataset
 
     function.attachDataSet(dataset)
 
