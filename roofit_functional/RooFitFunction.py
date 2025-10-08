@@ -75,7 +75,7 @@ class RooFitVar:
 
     **Examples**
 
-    >>> my_functon = RooFitVar({'y' : [-1,1]}, 'p1*y', {'p1' : [1,1,1]},'my_function')
+    >>> my_function = RooFitVar({'y' : [-1,1]}, 'p1*y', {'p1' : [1,1,1]},'my_function')
     >>> polynomial_function = RooFitVar({'x' : [-1,1]}, 'poly', {'p0' : [0.1,0,1], 'p1' : [0.05,-0.1,0.1]}, "poly")
 
     """
@@ -154,7 +154,7 @@ class RooFitVar:
                         )
                     elif len(v) == 1 or v[1] == v[2]:
                         parameter = ROOT.RooRealVar(
-                            k, k, v[0], v[0] - v[0] * 1e-3, v[0] + v[0] * 1e-3
+                            k, k, v[0], v[0] - abs(v[0] * 1e-3), v[0] + abs(v[0] * 1e-3)
                         )
                         parameter.setVal(v[0])
                         parameter.setConstant(True)
@@ -393,7 +393,7 @@ class RooFitFunction:
                         )
                     elif len(v) == 1 or v[1] == v[2]:
                         parameter = ROOT.RooRealVar(
-                            k, k, v[0], v[0] - 1e-3, v[0] + 1e-3
+                            k, k, v[0], abs(v[0] - 1e-3), abs(v[0] + 1e-3)
                         )
                         parameter.setVal(v[0])
                         parameter.setConstant(True)
@@ -1021,6 +1021,7 @@ if __name__ == "__main__":
             f_xy = gauss_xy * uniform_y
 
             print("Main functionality No.2 :", f_xy.function_type)
+            print("Main functionality No.2 :", uniform_y.x_limits)
 
         # Main funcitonality No.3
         elif num == 3:
