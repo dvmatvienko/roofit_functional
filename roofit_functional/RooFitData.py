@@ -159,10 +159,14 @@ class RooFitData:
             if isinstance(source, (ROOT.TH1, ROOT.TH2, ROOT.TH3)):
                 self._dataset = ROOT.RooDataHist(name, name, variables, Import=source)
             elif isinstance(source, (type(self), ROOT.RooDataSet)):
+                for i in range(len(variables)):
+                    variables[i].setBins(bins[i])
                 if isinstance(source, type(self)):
                     self._dataset = source.dataset.binnedClone()
                 else:
                     self._dataset = source.binnedClone()
+                for i in range(len(variables)):
+                    variables[i].setBins(100)
             elif isinstance(source, np.ndarray):
                 if isinstance(bins, int):
                     bins = [bins]

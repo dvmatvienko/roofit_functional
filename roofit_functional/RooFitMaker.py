@@ -1,6 +1,7 @@
 """Module to fit to data with RooFitFunction object."""
 import sys
 from pathlib import Path
+from math import prod
 
 try:
     import ROOT
@@ -31,6 +32,7 @@ class RooFitMaker:
         fittype: str,
         Range: dict[str, tuple[int | float]] | str = "",
         ExternalConstraints: set = set(),
+        GlobalObservables: set = set(),
         Minos: set | bool = False,
         Hesse: bool = True,
         **kwargs
@@ -43,6 +45,7 @@ class RooFitMaker:
             fittype: string ('ML' / 'chi2') defining a fit to data method
             Range: (optional )python dict initializing fir range for PDF variable / string name defining prior prepared variable range
             ExternalConstraints: (optional) python set defining external constraints to likelihood by multiplying them with the original likelihood
+            GlobalObservables: (optional) python set defining global observables used to contrain nuisance parameters
             Minos: (optional): Flag controls if MINOS is run after HESSE / python set running MINOS on given subset of arguments
             Hesse: (optional): Flag controls if HESSE is run after MIGRAD
 
@@ -63,53 +66,54 @@ class RooFitMaker:
                         x.setRange("Range", *v)
             Range = "Range"
 
+        fit_args = dict()
+
         if fittype == "ML":
+            fit_args['Extended'] = pdf.get_extended()
+            fit_args['Range'] = Range
+            fit_args['ExternalConstraints'] = ExternalConstraints
+            fit_args['GlobalObservables'] = GlobalObservables
+
             # construct ML of pdf w.r.t data
             self._cost = pdf.function.createNLL(
                 data.dataset,
-                Extended=pdf.get_extended(),
-                GlobalObservables=pdf.x,
-                Range=Range,
-                ExternalConstraints=ExternalConstraints,
+                **fit_args
             )
             # create RooFitResult object
             self._r = pdf.function.fitTo(
                 data.dataset,
-                Extended=pdf.get_extended(),
-                GlobalObservables=pdf.x,
-                Range=Range,
                 Save=True,
                 PrintLevel=-1,
-                ExternalConstraints=ExternalConstraints,
                 Minos=Minos,
                 Hesse=Hesse,
+                **fit_args,
                 **kwargs
             )
         elif fittype == "chi2":
             if data.datatype == 'unbinned':
-                raise ValueError(f"chi2 fit is valid only for unbinned data, but datatype used is {data.datatype}")
+                raise ValueError(f"chi2 fit is valid only for binned data, but datatype used is {data.datatype}")
+
+            fit_args['Extended'] = pdf.get_extended()
+            fit_args['Range'] = Range
+
             self._cost = pdf.function.createChi2(
                 data.dataset,
-                Extended=pdf.get_extended(),
-                GlobalObservables=pdf.x,
-                Range=Range,
-                ExternalConstraints=ExternalConstraints,
+                **fit_args
             )
             self._r = pdf.function.chi2FitTo(
                 data.dataset,
-                Extended=pdf.get_extended(),
-                GlobalObservables=pdf.x,
-                Range=Range,
                 Save=True,
                 PrintLevel=-1,
-                ExternalConstraints=ExternalConstraints,
                 Minos=Minos,
                 Hesse=Hesse,
+                **fit_args,
                 **kwargs
             )
 
         # pdf.set_NFitFloated(len(list(self._r.floatParsFinal())))
+        self._data = data
         self._pdf = pdf
+        self._fittype = fittype
 
     def dump_to_file(self, ofile: str = "fitresult.txt") -> None:
         """Dump fit results to file.
@@ -120,6 +124,8 @@ class RooFitMaker:
         """
         ofile = Path(ofile)
         r = self._r
+        data = self._data
+        fittype = self._fittype
         cov = r.covarianceMatrix()
         cor = r.correlationMatrix()
 
@@ -138,10 +144,14 @@ class RooFitMaker:
             sys.stdout = fi
             try:
                 print("\n")
+                print("Fit type :", fittype)
                 print("Status : ", r.status())
                 print("Error matrix quality : ", r.covQual())
                 print("FCN : ", r.minNll())
                 print("EDM :", r.edm())
+                if fittype == "chi2":
+                    print("chi2/NDF :", r.minNll() / (prod(data.bins)-len(r.floatParsFinal())-1))
+
                 print(
                     "List of fixed parameters :", *[v for v in r.constPars()], sep="\n"
                 )
@@ -206,7 +216,12 @@ class RooFitMaker:
     def give_fit_quality(self) -> dict:
         """Give fit quality status as python dict."""
         r = self._r
-        return {"Status": r.status(), "Quality": r.covQual(), "EDM": r.edm()}
+        fittype = self._fittype
+        data = self._data
+        if fittype == "chi2":
+            return {"Status": r.status(), "Quality": r.covQual(), "EDM": r.edm(), "chi2/NDF" : r.minNll() / (prod(data.bins)-len(r.floatParsFinal())-1)}
+        else:
+            return {"Status": r.status(), "Quality": r.covQual(), "EDM": r.edm(), "NLL/chi2" : r.minNll()}
 
 
 # ========== Simple examples for the module ==========
@@ -272,5 +287,11 @@ if __name__ == "__main__":
     binned_data = RooFitData(
         "test", "binned", (de_mom_uncorr, 500000), de_mom_uncorr.x, bins=[100, 100]
     )
+
     r = RooFitMaker(binned_data, de_mom_uncorr, "ML")
-    r.dump_to_file()
+    r.dump_to_file(ofile = 'fitresult_ML.txt')
+
+    r = RooFitMaker(binned_data, de_mom_uncorr, "chi2")
+    r.dump_to_file(ofile = 'fitresult_chi2.txt')
+
+    r.give_fit_quality()

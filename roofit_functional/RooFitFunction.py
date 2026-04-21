@@ -10,7 +10,6 @@ except ImportError as e:
         "ROOT is not properly installed. Plase install ROOT support first"
     ) from e
 
-
 # ========== Utilities ==========
 def wrapped(
     obj: Union["RooFitVar", "RooFitFunction"],
@@ -187,7 +186,7 @@ class RooFitVar:
             )
         elif function_type == "step":
             if len(container) % 2 == 0:
-                raise ValueError("length of 'param_dict' for step function must be odd")
+                raise ValueError(f"length of 'param_dict' for step function must be odd, but now lengths is {len(container)} ")
             number_of_bins = int((len(container) - 1) / 2)
             if (
                 not (len(container[number_of_bins:]) - len(container[:number_of_bins]))
@@ -314,6 +313,7 @@ class RooFitFunction:
         """Fill in containers of variables and parameters of PDFs."""
         x_limits = self._x_limits
         param_dict = self._param_dict
+        function_type = self._function_type
         marker = self._marker
         functionality = self._functionality
 
@@ -381,9 +381,10 @@ class RooFitFunction:
             indices = []
             for k, v in param_dict.items():
                 if not isinstance(v, (list, RooFitVar, type(self), int, float)):
-                    raise TypeError(
-                        "wrong type of 'param_dict' dict_value. It must be list / RooFitVar / RooFitFunction / int / float"
-                    )
+                    if v.__class__.__name__ != 'RooFitData':
+                        raise TypeError(
+                            "wrong type of 'param_dict' dict_value. It must be list / RooFitVar / RooFitFunction / int / float"
+                        )
                 if isinstance(v, (int, float)):
                     v = [v]
                 if isinstance(v, list):
@@ -392,23 +393,28 @@ class RooFitFunction:
                             "length of 'param_dict' dict_value is wrong. It must be equal one or three"
                         )
                     elif len(v) == 1 or v[1] == v[2]:
-                        parameter = ROOT.RooRealVar(
-                            k, k, v[0], abs(v[0] - 1e-3), abs(v[0] + 1e-3)
-                        )
-                        parameter.setVal(v[0])
-                        parameter.setConstant(True)
-                        container.append(parameter)
+                        if function_type == "HistPdf":
+                            container.append(*v)
+                        else:
+                            parameter = ROOT.RooRealVar(
+                              k, k, v[0], abs(v[0] - 1e-3), abs(v[0] + 1e-3)
+                            )
+                            parameter.setVal(v[0])
+                            parameter.setConstant(True)
+                            container.append(parameter)
                     else:
                         container.append(ROOT.RooRealVar(k, k, v[0], v[1], v[2]))
                 elif isinstance(v, RooFitVar):
                     container.append(v.function)
                     indices.append(container.index(container[-1]))
-                else:
+                elif isinstance(v,type(self)):
                     if k not in v.param_dict:
                         raise ValueError(f"key {k} does not exist in {v.param_dict}!")
                     for arg in v.container:
                         if arg.GetName() == k:
                             container.append(arg)
+                elif v.__class__.__name__ == 'RooFitData':
+                    container.append(v.dataset)
         if marker == "add":
             container = (
                 list(np.unique(functionality[0].container + functionality[1].container))
@@ -523,7 +529,7 @@ class RooFitFunction:
         function_type = function_type.split("|")[0]
         # Dict to check correct number of parameters provided in the constructor
         function_type_dict = {
-            "CrystalBall": [6, 7],
+            "CrystalBall": [4,6,7],
             "Uniform": [0],
             "BifurGauss": [3],
             "BreitWigner": [2],
@@ -531,6 +537,7 @@ class RooFitFunction:
             "Voigtian": [3],
             "Novosibirsk": [3],
             "Johnson": [4],
+            "HistPdf": [2]
         }
         right_param_dict_len = function_type_dict.get(
             function_type, [len(self._param_dict)]
@@ -544,13 +551,41 @@ class RooFitFunction:
             raise AttributeError(
                 f"param 'function_type' is not implemented. It must be one in {list[function_type_dict.keys()]}"
             )
-        if not len(x) == 1:
+        if function_type == "CrystalBall":
+            print("Please make sure to pass parameters in the following chain:")
+            print("Double-sided asymmetric CrystalBall: mean, sigma_L, sigma_R, alpha_L, n_L, alpha_R, n_R")
+            print("Double-sided symmetric CrystalBall: mean ,sigma, alpha_L, n_L, alpha_R, n_R")
+            print("One-sided symmetric CrystalBall: mean, sigma, alpha, n")
+        elif function_type == "BifurGauss":
+            print("Please make sure to pass parameters in the following chain:")
+            print("BifurGauss: mean, sigma_L, sigma_R")
+        elif function_type == "BreitWigner":
+            print("Please make sure to pass parameters in the following chain:")
+            print("BreitWigner: mean, width")
+        elif function_type == "Voigtian":
+            print("Please make sure to pass parameters in the following chain:")
+            print("Vigtian: mean, width, sigma")
+        elif function_type == "Novosibirsk":
+            print("Please make sure to pass parameters in the following chain:")
+            print("Novosibirsk: peak, width, tail")
+        elif function_type == "Johnson":
+            print("Please make sure to pass parameters in the following chain:")
+            print("Johnson: mu, lambda, gamma, delta")
+        elif function_type == "HistPdf":
+            print("Please make sure to pass parameters in the following chain:")
+            print("HistPdf: binned_dataset, interpolation_coeff")
+        if not len(x) == 1 and function_type != "HistPdf":
             raise AttributeError(
-                "wrong number of arguments in the function. Only one-dimensional functional primitive is allowed!!"
+                "wrong number of arguments in the function. Only one-dimensional parametric functional primitive is allowed!!"
             )
-        return eval("ROOT.Roo" + function_type)(
-            function_name, function_type, *x, *container
-        )
+        if function_type == "HistPdf":
+            return eval("ROOT.Roo" + function_type)(
+                function_name, function_type, set(x), *container
+            )
+        else:
+            return eval("ROOT.Roo" + function_type)(
+                function_name, function_type, *x, *container
+            )
 
     def __init__(
         self, name: str, x_limits: dict, function_type: str, param_dict: dict

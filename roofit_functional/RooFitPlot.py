@@ -477,8 +477,8 @@ if __name__ == "__main__":
     )
 
     # PDF product fit to data
-    r = RooFitMaker(binned_data, product, "ML")
-    r.dump_to_file()
+    r = RooFitMaker(binned_data, product, "chi2")
+    r.dump_to_file(ofile='fitresult_chi2.txt')
 
     # Plot x-projection in y-slice (0.76-0.80)
     p = RooFitPlot(
